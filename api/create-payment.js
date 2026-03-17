@@ -35,7 +35,7 @@ export default async function handler(req, res) {
         price_currency: "usd",
         order_id: orderId + "-" + Date.now(),
         order_description: "USAWeed Order Payment",
-        ipn_callback_url: "https://YOUR-VERCEL-DOMAIN.vercel.app/api/webhook",
+        ipn_callback_url: "https://usaweed.vercel.app/api/webhook",
         is_fixed_rate: true
       })
     });
