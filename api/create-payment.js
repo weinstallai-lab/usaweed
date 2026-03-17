@@ -1,68 +1,62 @@
-import CryptoJS from "crypto-js";
-
 export default async function handler(req, res) {
-  res.setHeader("Access-Control-Allow-Origin", "https://greenleaf.website");
+  res.setHeader("Access-Control-Allow-Origin", "https://usaweed.site");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  res.setHeader(
-    "Access-Control-Allow-Headers",
-    "Content-Type, Authorization, api-key"
-  );
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
   if (req.method === "OPTIONS") {
     return res.status(200).end();
   }
 
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method Not Allowed" });
+  }
+
   try {
     const { amount, orderId, email, name } = req.body;
 
-    const apiKey = process.env.MAXELPAY_API_KEY;
-    const secret = process.env.MAXELPAY_API_SECRET;
-
-    if (!apiKey || !secret) {
-      return res.status(500).json({ error: "Missing API credentials" });
+    if (!amount || !orderId || !email) {
+      return res.status(400).json({ error: "Missing required fields" });
     }
 
-    const timestamp = Math.floor(Date.now() / 1000);
+    const apiKey = process.env.NOWPAYMENTS_API_KEY;
 
-    const payload = {
-      orderID: orderId,
-      amount: amount,
-      currency: "USD",
-      timestamp: timestamp,
-      userName: name,
-      siteName: "GreenLeaf",
-      userEmail: email,
-      redirectUrl: "https://greenleaf.website/payment-success",
-      websiteUrl: "https://greenleaf.website",
-      cancelUrl: "https://greenleaf.website/payment-failed",
-      webhookUrl: "https://greenleaf.website/api/webhook"
-    };
+    if (!apiKey) {
+      return res.status(500).json({ error: "API Key not configured" });
+    }
 
-    const key = CryptoJS.enc.Utf8.parse(secret);
-    const iv = CryptoJS.enc.Utf8.parse(secret.slice(0, 16));
-
-    const encrypted = CryptoJS.AES.encrypt(
-      JSON.stringify(payload),
-      key,
-      { iv, mode: CryptoJS.mode.CBC, padding: CryptoJS.pad.Pkcs7 }
-    ).toString();
-
-    const response = await fetch(
-      "https://api.maxelpay.com/v1/prod/merchant/order/checkout",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "api-key": apiKey
-        },
-        body: JSON.stringify({ data: encrypted })
-      }
-    );
+    const response = await fetch("https://api.nowpayments.io/v1/invoice", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey
+      },
+      body: JSON.stringify({
+        price_amount: Number(amount),
+        price_currency: "usd",
+        order_id: orderId + "-" + Date.now(),
+        order_description: "USAWeed Order Payment",
+        ipn_callback_url: "https://YOUR-VERCEL-DOMAIN.vercel.app/api/webhook",
+        is_fixed_rate: true
+      })
+    });
 
     const data = await response.json();
-    return res.status(response.status).json(data);
+
+    if (!response.ok) {
+      return res.status(response.status).json({
+        error: data.message || "Payment failed",
+        details: data
+      });
+    }
+
+    return res.status(200).json({
+      payment_url: data.invoice_url
+    });
 
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return res.status(500).json({
+      error: "Server error",
+      message: err.message
+    });
   }
 }
